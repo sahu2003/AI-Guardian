@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Guardian - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #suspicious-alert-sidebar {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            width: 280px;
+            z-index: 9999;
+        }
+
+        .suspicious-alert {
+            background: #e53935;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0px 4px 8px rgba(0,0,0,0.3);
+            font-weight: bold;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+
+<body class="light-mode">
+
+<div id="loader" style="display:flex;justify-content:center;align-items:center;height:100vh;">
+    <div class="loader"></div>
+</div>
+
+<div id="main-content" style="display:none;">
+    <nav class="navbar">
+        <div class="logo">AI Guardian</div>
+        <div class="nav-items">
+            <a href="/admin">Admin</a>
+            <a href="#live">Live Feed</a>
+            <a href="#stats">Stats</a>
+            <a href="#alerts">Alerts</a>
+            <button class="toggle-btn" onclick="toggleTheme()">🌗 Toggle Mode</button>
+        </div>
+    </nav>
+
+    <div id="notification-sidebar"></div>
+    <div id="suspicious-alert-sidebar"></div>
+
+    <section class="hero" id="live">
+        <h1>Real-Time Surveillance</h1>
+
+        <!-- Live or Uploaded Feed -->
+        <div class="video-container">
+            <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Live Feed" class="live-feed">
+        </div>
+    </section>
+
+    <section class="stats" id="stats">
+        <h2>Detection Statistics</h2>
+        <div class="cards">
+            <div class="card">
+                <h3>Detected Objects</h3>
+                <p id="detected-objects">0</p>
+                <div class="progress-bar"><div class="progress-fill" id="detected-progress"></div></div>
+            </div>
+            <div class="card">
+                <h3>Alerts Triggered</h3>
+                <p id="alerts-triggered">0</p>
+                <div class="progress-bar"><div class="progress-fill" id="alerts-progress"></div></div>
+            </div>
+            <div class="card">
+                <h3>Active Zones</h3>
+                <p id="motion-zones">0</p>
+                <div class="progress-bar"><div class="progress-fill" id="zones-progress"></div></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="alerts" id="alerts">
+        <h2>Recent Alerts</h2>
+        <ul id="alert-list">
+            <li>No alerts yet.</li>
+        </ul>
+
+        <h2>Detection History 📜</h2>
+        <table border="1" style="width:100%;margin-top:10px;text-align:center;">
+            <thead><tr><th>Time</th><th>Alert</th></tr></thead>
+            <tbody id="history-table"></tbody>
+        </table>
+
+        <h2>Detections Growth 📈</h2>
+        <canvas id="detectionChart" width="400" height="200"></canvas>
+
+        <h2>Suspicious Activity Trend 📈</h2>
+        <canvas id="suspiciousChart" width="400" height="200"></canvas>
+    </section>
+
+    <footer>
+        <p>&copy; 2025 AI Guardian Surveillance System</p>
+    </footer>
+</div>
+
+<audio id="alertSound" src="{{ url_for('static', filename='beep.mp3') }}"></audio>
+
+<script>
+    window.onload = function () {
+        document.getElementById("loader").style.display = "none";
+        document.getElementById("main-content").style.display = "block";
+    }
+
+    let detectedObjects = 0, alertsTriggered = 0, motionZones = 0;
+    let alertList = document.getElementById('alert-list');
+    let historyTable = document.getElementById('history-table');
+    const sound = document.getElementById('alertSound');
+
+    let suspiciousCount = 0;
+    const suspiciousTimes = [];
+    const suspiciousCounts = [];
+
+    const ctx = document.getElementById('detectionChart').getContext('2d');
+    const detectionChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{ label: 'Detections', data: [], borderColor: '#4caf50', borderWidth: 2 }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+
+    const suspiciousCtx = document.getElementById('suspiciousChart').getContext('2d');
+    const suspiciousChart = new Chart(suspiciousCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Suspicious Alerts',
+                data: [],
+                borderColor: '#e53935',
+                borderWidth: 2
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
+
+    function animateValue(id, start, end, duration) {
+        let obj = document.getElementById(id);
+        let range = end - start, current = start;
+        let increment = end > start ? 1 : -1;
+        let stepTime = Math.abs(Math.floor(duration / range));
+        let timer = setInterval(function () {
+            current += increment;
+            obj.innerText = current;
+            if (current == end) clearInterval(timer);
+        }, stepTime);
+    }
+
+    function updateStats() {
+        let detectedInc = Math.floor(Math.random() * 3);
+        let alertsInc = Math.floor(Math.random() * 2);
+        let zonesInc = Math.floor(Math.random() * 1);
+
+        animateValue('detected-objects', detectedObjects, detectedObjects + detectedInc, 500);
+        animateValue('alerts-triggered', alertsTriggered, alertsTriggered + alertsInc, 500);
+        animateValue('motion-zones', motionZones, Math.min(motionZones + zonesInc, 10), 500);
+
+        detectedObjects += detectedInc;
+        alertsTriggered += alertsInc;
+        motionZones = Math.min(motionZones + zonesInc, 10);
+
+        document.getElementById('detected-progress').style.width = Math.min(detectedObjects * 5, 100) + '%';
+        document.getElementById('alerts-progress').style.width = Math.min(alertsTriggered * 10, 100) + '%';
+        document.getElementById('zones-progress').style.width = motionZones * 10 + '%';
+
+        if (alertsInc > 0) {
+            let time = new Date().toLocaleTimeString();
+            let newAlert = document.createElement('li');
+            newAlert.innerHTML = `<b>Intruder Detected</b> at ${time}`;
+            alertList.prepend(newAlert);
+
+            let newRow = historyTable.insertRow(0);
+            newRow.innerHTML = `<td>${time}</td><td>Motion Detected</td>`;
+
+            sound.play();
+
+            let notification = document.createElement('div');
+            notification.style.background = '#ffc107';
+            notification.style.padding = '10px';
+            notification.style.marginBottom = '10px';
+            notification.style.borderRadius = '8px';
+            notification.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+            notification.innerHTML = `<b>🚨 Alert:</b> Motion detected at ${time}`;
+            document.getElementById('notification-sidebar').prepend(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        detectionChart.data.labels.push(new Date().toLocaleTimeString());
+        detectionChart.data.datasets[0].data.push(detectedObjects);
+        if (detectionChart.data.labels.length > 10) {
+            detectionChart.data.labels.shift();
+            detectionChart.data.datasets[0].data.shift();
+        }
+        detectionChart.update();
+    }
+
+    setInterval(updateStats, 4000);
+
+    function toggleTheme() {
+        let body = document.body;
+        body.classList.toggle('dark-mode');
+        body.classList.toggle('light-mode');
+    }
+
+    function showSuspiciousAlert() {
+        const sidebar = document.getElementById('suspicious-alert-sidebar');
+        const alertBox = document.createElement('div');
+        alertBox.className = 'suspicious-alert';
+        const time = new Date().toLocaleTimeString();
+        alertBox.innerHTML = `⚠️ Suspicious Activity Detected at ${time}`;
+
+        sidebar.prepend(alertBox);
+        sound.play();
+
+        suspiciousCount += 1;
+        suspiciousTimes.push(time);
+        suspiciousCounts.push(suspiciousCount);
+
+        suspiciousChart.data.labels = suspiciousTimes.slice(-10);
+        suspiciousChart.data.datasets[0].data = suspiciousCounts.slice(-10);
+        suspiciousChart.update();
+
+        setTimeout(() => {
+            alertBox.remove();
+        }, 6000);
+    }
+
+    // Upload & feed switch logic
+    function useCameraFeed() {
+        document.getElementById('videoFeed').src = "{{ url_for('video_feed') }}";
+    }
+
+    function uploadVideo() {
+        const fileInput = document.getElementById('videoUpload');
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('video', file);
+
+        fetch('/upload_video', {
+            method: 'POST',
+            body: formData
+        }).then(() => {
+            document.getElementById('videoFeed').src = '/video_feed?source=upload';
+        });
+    }
+
+    const suspiciousSource = new EventSource("/suspicious_feed");
+
+    suspiciousSource.onmessage = function (event) {
+        if (event.data === "suspicious") {
+            showSuspiciousAlert();
+        }
+    };
+</script>
+
+</body>
+</html>

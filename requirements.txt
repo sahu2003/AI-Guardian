@@ -1,0 +1,11 @@
+opencv-python==4.5.3.56
+flask==2.1.0
+tensorflow==2.8.0
+torch==1.9.0  # Compatible with Python 3.8
+yolov5==6.1.1
+pandas==1.4.2
+matplotlib==3.5.1
+pyttsx3==2.90
+gTTS==2.2.3
+twilio==6.61.0
+mediapipe==0.10.11  # Updated version of mediapipe
